@@ -15,6 +15,7 @@ import { useBasicLayout } from '@/hooks/useBasicLayout'
 import { useChatStore, usePromptStore } from '@/store'
 import { fetchChatAPIProcess } from '@/api'
 import { t } from '@/locales'
+import axios from "axios";
 
 let controller = new AbortController()
 
@@ -356,6 +357,52 @@ function handleExport() {
   })
 }
 
+async function handleUpload() {
+	if (loading.value) return
+
+	const input = document.createElement('input')
+	input.type = 'file'
+	input.accept = '.xls,.xlsx'
+	input.multiple = true // ✅ 支持多文件
+
+	input.onchange = async (e) => {
+		const files = Array.from(e.target.files)
+		if (!files.length) return
+
+		const maxSizeMB = 100
+		for (const file of files) {
+			if (file.size / 1024 / 1024 > maxSizeMB) {
+				window.$message?.error(`文件 "${file.name}" 大小超过 ${maxSizeMB}MB`)
+				return
+			}
+		}
+
+		loading.value = true
+		try {
+			const formData = new FormData()
+			files.forEach(file => {
+				formData.append('files[]', file)
+			})
+
+			// const res = await axios.post('/api/upload', formData, {
+			// 	headers: { 'Content-Type': 'multipart/form-data' },
+			// })
+			window.$message?.success('上传成功')
+			if (res.data?.success) {
+				window.$message?.success('上传成功')
+			} else {
+				window.$message?.error(res.data?.message || '上传失败')
+			}
+		} catch (err) {
+			console.error('上传出错:', err)
+			window.$message?.error('上传失败')
+		} finally {
+			loading.value = false
+		}
+	}
+	input.click()
+}
+
 function handleDelete(index: number) {
   if (loading.value)
     return
@@ -528,6 +575,11 @@ onUnmounted(() => {
               <SvgIcon icon="ri:chat-history-line" />
             </span>
           </HoverButton>
+					<HoverButton v-if="!isMobile" @click="handleUpload">
+            <span class="text-xl text-[#4f555e] dark:text-white">
+              <SvgIcon icon="ri:upload-2-line" />
+            </span>
+					</HoverButton>
           <NAutoComplete v-model:value="prompt" :options="searchOptions" :render-label="renderOption">
             <template #default="{ handleInput, handleBlur, handleFocus }">
               <NInput
