@@ -1,20 +1,20 @@
 <script setup lang='ts'>
-import type { Ref } from 'vue'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { storeToRefs } from 'pinia'
-import { NAutoComplete, NButton, NInput, useDialog, useMessage } from 'naive-ui'
+import type {Ref} from 'vue'
+import {computed, onMounted, onUnmounted, ref} from 'vue'
+import {useRoute} from 'vue-router'
+import {storeToRefs} from 'pinia'
+import {NAutoComplete, NButton, NInput, useDialog, useMessage} from 'naive-ui'
 import html2canvas from 'html2canvas'
-import { Message } from './components'
-import { useScroll } from './hooks/useScroll'
-import { useChat } from './hooks/useChat'
-import { useUsingContext } from './hooks/useUsingContext'
+import {Message} from './components'
+import {useScroll} from './hooks/useScroll'
+import {useChat} from './hooks/useChat'
+import {useUsingContext} from './hooks/useUsingContext'
 import HeaderComponent from './components/Header/index.vue'
-import { HoverButton, SvgIcon } from '@/components/common'
-import { useBasicLayout } from '@/hooks/useBasicLayout'
-import { useChatStore, usePromptStore } from '@/store'
-import { fetchChatAPIProcess } from '@/api'
-import { t } from '@/locales'
+import {HoverButton, SvgIcon} from '@/components/common'
+import {useBasicLayout} from '@/hooks/useBasicLayout'
+import {useChatStore, usePromptStore} from '@/store'
+import {fetchChatAPIProcess} from '@/api'
+import {t} from '@/locales'
 import axios from "axios";
 
 let controller = new AbortController()
@@ -27,12 +27,12 @@ const ms = useMessage()
 
 const chatStore = useChatStore()
 
-const { isMobile } = useBasicLayout()
-const { addChat, updateChat, updateChatSome, getChatByUuidAndIndex } = useChat()
-const { scrollRef, scrollToBottom, scrollToBottomIfAtBottom } = useScroll()
-const { usingContext, toggleUsingContext } = useUsingContext()
+const {isMobile} = useBasicLayout()
+const {addChat, updateChat, updateChatSome, getChatByUuidAndIndex} = useChat()
+const {scrollRef, scrollToBottom, scrollToBottomIfAtBottom} = useScroll()
+const {usingContext, toggleUsingContext} = useUsingContext()
 
-const { uuid } = route.params as { uuid: string }
+const {uuid} = route.params as { uuid: string }
 
 const dataSources = computed(() => chatStore.getChatByUuid(+uuid))
 const conversationList = computed(() => dataSources.value.filter(item => (!item.inversion && !!item.conversationOptions)))
@@ -42,24 +42,37 @@ const loading = ref<boolean>(false)
 const inputRef = ref<Ref | null>(null)
 const fileNames = ref<string[]>([])
 const showFileList = ref(true)
+const USER_UUID_KEY = 'chat_user_uuid'
+const userUuid = ref<string>(localStorage.getItem(USER_UUID_KEY) ?? '')
+
+if (!userUuid.value) {
+	const gen = (typeof crypto !== 'undefined' && (crypto as any).randomUUID) ? (crypto as any).randomUUID() : `u_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+	userUuid.value = gen
+	try {
+		localStorage.setItem(USER_UUID_KEY, userUuid.value)
+	} catch (e) {
+		// ignore storage errors
+	}
+}
+
 function toggleFileList() {
 	showFileList.value = !showFileList.value
 }
 
-function removeFileName(name: string) {
-	fileNames.value = fileNames.value.filter(n => n !== name)
+function removeFileName(index: number) {
+	fileNames.value.splice(index, 1)
 }
 
 // 添加PromptStore
 const promptStore = usePromptStore()
 
 // 使用storeToRefs，保证store修改后，联想部分能够重新渲染
-const { promptList: promptTemplate } = storeToRefs<any>(promptStore)
+const {promptList: promptTemplate} = storeToRefs<any>(promptStore)
 
 // 未知原因刷新页面，loading 状态不会重置，手动重置
 dataSources.value.forEach((item, index) => {
 	if (item.loading)
-		updateChatSome(+uuid, index, { loading: false })
+		updateChatSome(+uuid, index, {loading: false})
 })
 
 function handleSubmit() {
@@ -85,7 +98,7 @@ async function onConversation() {
 			inversion: true,
 			error: false,
 			conversationOptions: null,
-			requestOptions: { prompt: message, options: null },
+			requestOptions: {prompt: message, options: null},
 		},
 	)
 	scrollToBottom()
@@ -97,7 +110,7 @@ async function onConversation() {
 	const lastContext = conversationList.value[conversationList.value.length - 1]?.conversationOptions
 
 	if (lastContext && usingContext.value)
-		options = { ...lastContext }
+		options = {...lastContext}
 
 	addChat(
 		+uuid,
@@ -108,105 +121,132 @@ async function onConversation() {
 			inversion: false,
 			error: false,
 			conversationOptions: null,
-			requestOptions: { prompt: message, options: { ...options } },
+			requestOptions: {prompt: message, options: {...options}},
 		},
 	)
 	scrollToBottom()
 
 	try {
-					if (fileNames.value && fileNames.value.length > 0) {
-						try {
-							const resp = await axios.post('http://127.0.0.1:5000/chatExcel/query', {
-								prompt: message,
-								files: fileNames.value,
-								options,
-							}, { signal: controller.signal })
-							const respData = resp?.data
-							const textResult = respData?.text ?? respData?.result ?? (typeof respData === 'string' ? respData : JSON.stringify(respData))
-							updateChat(
-								+uuid,
-								dataSources.value.length - 1,
-								{
-									dateTime: new Date().toLocaleString(),
-									text: textResult,
-									inversion: false,
-									error: false,
-									loading: false,
-									conversationOptions: null,
-									requestOptions: { prompt: message, options: { ...options } },
-								},
-							)
-							scrollToBottomIfAtBottom()
-						}
-						catch (error: any) {
-							const errorMessage = error?.message ?? t('common.wrong')
-							updateChat(
-								+uuid,
-								dataSources.value.length - 1,
-								{
-									dateTime: new Date().toLocaleString(),
-									text: errorMessage,
-									inversion: false,
-									error: true,
-									loading: false,
-									conversationOptions: null,
-									requestOptions: { prompt: message, options: { ...options } },
-								},
-							)
-						}
-						return
-					}
+		if (fileNames.value && fileNames.value.length > 0) {
+			const controller = new AbortController()
+			const resp = await fetch('http://127.0.0.1:5000/chatExcel/query', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					query: message,
+					userId: userUuid.value,
+				}),
+				signal: controller.signal,
+			})
 
-					let lastText = ''
-					const fetchChatAPIOnce = async () => {
-						await fetchChatAPIProcess<Chat.ConversationResponse>({
-							prompt: message,
-							options,
-							signal: controller.signal,
-							onDownloadProgress: ({ event }) => {
-								const xhr = event.target
-								const { responseText } = xhr
-								// Always process the final line
-								const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
-								let chunk = responseText
-								if (lastIndex !== -1)
-									chunk = responseText.substring(lastIndex)
-								try {
-									const data = JSON.parse(chunk)
-									updateChat(
-										+uuid,
-										dataSources.value.length - 1,
-										{
-											dateTime: new Date().toLocaleString(),
-											text: lastText + (data.text ?? ''),
-											inversion: false,
-											error: false,
-											loading: true,
-											conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
-											requestOptions: { prompt: message, options: { ...options } },
-										},
-									)
+			const reader = resp.body.getReader()
+			const decoder = new TextDecoder('utf-8')
+			let fullText = ''
 
-									if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
-										options.parentMessageId = data.id
-										lastText = data.text
-										message = ''
-										return fetchChatAPIOnce()
-									}
+			while (true) {
+				const {done, value} = await reader.read()
+				if (done) break
 
-									scrollToBottomIfAtBottom()
-								}
-								catch (error) {
-									//
-								}
+				const chunk = decoder.decode(value, {stream: true})
+				const lines = chunk.split('\n').filter(Boolean)
+
+				for (const line of lines) {
+					try {
+						const data = JSON.parse(line)
+						if (data.text === '[DONE]') break
+
+						fullText += data.text
+
+						updateChat(
+							+uuid,
+							dataSources.value.length - 1,
+							{
+								dateTime: new Date().toLocaleString(),
+								text: fullText,
+								inversion: false,
+								error: false,
+								loading: true, // 还在流式输出中
+								conversationOptions: null,
+								requestOptions: {prompt: message, options: {...options}},
 							},
-						})
-						updateChatSome(+uuid, dataSources.value.length - 1, { loading: false })
+						)
+						scrollToBottomIfAtBottom()
+					} catch (e) {
+						console.error('Parse error', e, line)
 					}
+				}
+			}
 
-					await fetchChatAPIOnce()
-	}
-	catch (error: any) {
+// 最终更新 loading = false
+			updateChat(
+				+uuid,
+				dataSources.value.length - 1,
+				{
+					dateTime: new Date().toLocaleString(),
+					text: fullText,
+					inversion: false,
+					error: false,
+					loading: false,
+					conversationOptions: null,
+					requestOptions: {prompt: message, options: {...options}},
+				},
+			)
+
+			return
+		}
+
+		let lastText = ''
+			// attach user uuid to options so backend can identify requester
+		;(options as any).userUuid = userUuid.value
+		const fetchChatAPIOnce = async () => {
+			await fetchChatAPIProcess<Chat.ConversationResponse>({
+				prompt: message,
+				options,
+				signal: controller.signal,
+				onDownloadProgress: ({event}) => {
+					const xhr = event.target
+					const {responseText} = xhr
+					// Always process the final line
+					const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
+					let chunk = responseText
+					if (lastIndex !== -1)
+						chunk = responseText.substring(lastIndex)
+					try {
+						const data = JSON.parse(chunk)
+						updateChat(
+							+uuid,
+							dataSources.value.length - 1,
+							{
+								dateTime: new Date().toLocaleString(),
+								text: lastText + (data.text ?? ''),
+								inversion: false,
+								error: false,
+								loading: true,
+								conversationOptions: {conversationId: data.conversationId, parentMessageId: data.id},
+								requestOptions: {prompt: message, options: {...options}},
+							},
+						)
+
+						if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
+							options.parentMessageId = data.id
+							lastText = data.text
+							message = ''
+							return fetchChatAPIOnce()
+						}
+
+						scrollToBottomIfAtBottom()
+					} catch (error) {
+						//
+					}
+				},
+			})
+			updateChatSome(+uuid, dataSources.value.length - 1, {loading: false})
+		}
+
+		await fetchChatAPIOnce()
+	} catch (error: any) {
 		const errorMessage = error?.message ?? t('common.wrong')
 
 		if (error.message === 'canceled') {
@@ -246,12 +286,11 @@ async function onConversation() {
 				error: true,
 				loading: false,
 				conversationOptions: null,
-				requestOptions: { prompt: message, options: { ...options } },
+				requestOptions: {prompt: message, options: {...options}},
 			},
 		)
 		scrollToBottomIfAtBottom()
-	}
-	finally {
+	} finally {
 		loading.value = false
 	}
 }
@@ -262,14 +301,17 @@ async function onRegenerate(index: number) {
 
 	controller = new AbortController()
 
-	const { requestOptions } = dataSources.value[index]
+	const {requestOptions} = dataSources.value[index]
 
 	let message = requestOptions?.prompt ?? ''
 
 	let options: Chat.ConversationRequest = {}
 
 	if (requestOptions.options)
-		options = { ...requestOptions.options }
+		options = {...requestOptions.options}
+		// ensure regenerate requests also carry user uuid
+		;
+	(options as any).userUuid = userUuid.value
 
 	loading.value = true
 
@@ -283,7 +325,7 @@ async function onRegenerate(index: number) {
 			error: false,
 			loading: true,
 			conversationOptions: null,
-			requestOptions: { prompt: message, options: { ...options } },
+			requestOptions: {prompt: message, options: {...options}},
 		},
 	)
 
@@ -294,9 +336,9 @@ async function onRegenerate(index: number) {
 				prompt: message,
 				options,
 				signal: controller.signal,
-				onDownloadProgress: ({ event }) => {
+				onDownloadProgress: ({event}) => {
 					const xhr = event.target
-					const { responseText } = xhr
+					const {responseText} = xhr
 					// Always process the final line
 					const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
 					let chunk = responseText
@@ -313,8 +355,8 @@ async function onRegenerate(index: number) {
 								inversion: false,
 								error: false,
 								loading: true,
-								conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
-								requestOptions: { prompt: message, options: { ...options } },
+								conversationOptions: {conversationId: data.conversationId, parentMessageId: data.id},
+								requestOptions: {prompt: message, options: {...options}},
 							},
 						)
 
@@ -324,17 +366,15 @@ async function onRegenerate(index: number) {
 							message = ''
 							return fetchChatAPIOnce()
 						}
-					}
-					catch (error) {
+					} catch (error) {
 						//
 					}
 				},
 			})
-			updateChatSome(+uuid, index, { loading: false })
+			updateChatSome(+uuid, index, {loading: false})
 		}
 		await fetchChatAPIOnce()
-	}
-	catch (error: any) {
+	} catch (error: any) {
 		if (error.message === 'canceled') {
 			updateChatSome(
 				+uuid,
@@ -358,11 +398,10 @@ async function onRegenerate(index: number) {
 				error: true,
 				loading: false,
 				conversationOptions: null,
-				requestOptions: { prompt: message, options: { ...options } },
+				requestOptions: {prompt: message, options: {...options}},
 			},
 		)
-	}
-	finally {
+	} finally {
 		loading.value = false
 	}
 }
@@ -398,11 +437,9 @@ function handleExport() {
 				d.loading = false
 				ms.success(t('chat.exportSuccess'))
 				Promise.resolve()
-			}
-			catch (error: any) {
+			} catch (error: any) {
 				ms.error(t('chat.exportFailed'))
-			}
-			finally {
+			} finally {
 				d.loading = false
 			}
 		},
@@ -417,18 +454,12 @@ async function handleUpload() {
 	input.accept = '.xls,.xlsx'
 	input.multiple = true // ✅ 支持多文件
 
-	input.onchange = async (e) => {
-		const files = Array.from(e.target.files)
-		// 为每个文件生成唯一时间戳前缀，创建新 File 实例
-		// 生成标准时间字符串前缀
-		function formatDate(date: Date) {
-			const pad = (n: number) => n.toString().padStart(2, '0')
-			return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-		}
+	input.onchange = async (e: Event) => {
+		const target = e.target as HTMLInputElement | null
+		const files = Array.from(target?.files ?? []) as File[]
 		const updatedFiles = files.map(file => {
-			const nowStr = formatDate(new Date())
-			const newName = `${nowStr}_${file.name}`
-			return new File([file], newName, { type: file.type })
+			const newName = `${file.name}`
+			return new File([file], newName, {type: file.type})
 		})
 		fileNames.value = [...fileNames.value, ...updatedFiles.map(file => file.name)]
 		if (!files.length) return
@@ -444,14 +475,15 @@ async function handleUpload() {
 		loading.value = true
 		try {
 			const formData = new FormData()
+			// include user uuid to distinguish uploads from different users
+			formData.append('userId', userUuid.value)
 			updatedFiles.forEach(file => {
-				formData.append('files[]', file)
+				formData.append('files', file)
 			})
 
 			const res = await axios.post('http://127.0.0.1:5000/chatExcel/upload', formData, {
-				headers: { 'Content-Type': 'multipart/form-data' },
+				headers: {'Content-Type': 'multipart/form-data'},
 			})
-			window.$message?.success('上传成功')
 			if (res.data?.success) {
 				window.$message?.success('上传成功')
 			} else {
@@ -504,8 +536,7 @@ function handleEnter(event: KeyboardEvent) {
 			event.preventDefault()
 			handleSubmit()
 		}
-	}
-	else {
+	} else {
 		if (event.key === 'Enter' && event.ctrlKey) {
 			event.preventDefault()
 			handleSubmit()
@@ -525,14 +556,15 @@ function handleStop() {
 // 理想状态下其实应该是key作为索引项,但官方的renderOption会出现问题，所以就需要value反renderLabel实现
 const searchOptions = computed(() => {
 	if (prompt.value.startsWith('/')) {
-		return promptTemplate.value.filter((item: { key: string }) => item.key.toLowerCase().includes(prompt.value.substring(1).toLowerCase())).map((obj: { value: any }) => {
+		return promptTemplate.value.filter((item: {
+			key: string
+		}) => item.key.toLowerCase().includes(prompt.value.substring(1).toLowerCase())).map((obj: { value: any }) => {
 			return {
 				label: obj.value,
 				value: obj.value,
 			}
 		})
-	}
-	else {
+	} else {
 		return []
 	}
 })
@@ -592,7 +624,7 @@ onUnmounted(() => {
 				>
 					<template v-if="!dataSources.length">
 						<div class="flex items-center justify-center mt-4 text-center text-neutral-300">
-							<SvgIcon icon="ri:bubble-chart-fill" class="mr-2 text-3xl" />
+							<SvgIcon icon="ri:bubble-chart-fill" class="mr-2 text-3xl"/>
 							<span>Aha~</span>
 						</div>
 					</template>
@@ -612,7 +644,7 @@ onUnmounted(() => {
 							<div class="sticky bottom-0 left-0 flex justify-center">
 								<NButton v-if="loading" type="warning" @click="handleStop">
 									<template #icon>
-										<SvgIcon icon="ri:stop-circle-line" />
+										<SvgIcon icon="ri:stop-circle-line"/>
 									</template>
 									Stop Responding
 								</NButton>
@@ -627,36 +659,42 @@ onUnmounted(() => {
 				<div class="flex items-center justify-between space-x-2">
 					<HoverButton @click="handleClear">
             <span class="text-xl text-[#4f555e] dark:text-white">
-              <SvgIcon icon="ri:delete-bin-line" />
+              <SvgIcon icon="ri:delete-bin-line"/>
             </span>
 					</HoverButton>
 					<HoverButton v-if="!isMobile" @click="handleExport">
             <span class="text-xl text-[#4f555e] dark:text-white">
-              <SvgIcon icon="ri:download-2-line" />
+              <SvgIcon icon="ri:download-2-line"/>
             </span>
 					</HoverButton>
 					<HoverButton v-if="!isMobile" @click="toggleUsingContext">
             <span class="text-xl" :class="{ 'text-[#4b9e5f]': usingContext, 'text-[#a8071a]': !usingContext }">
-              <SvgIcon icon="ri:chat-history-line" />
+              <SvgIcon icon="ri:chat-history-line"/>
             </span>
 					</HoverButton>
 					<!-- 文件列表弹窗组件，显示在上传按钮上方 -->
-					<div v-if="fileNames.length > 0 && showFileList && !isMobile" style="position: absolute; bottom: 60px; left: 0; right: 0; margin: auto; z-index: 1000; max-width: 800px; width: 100%; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); border: 1px solid #eee; padding: 12px 16px;">
-						<div style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; min-height: 40px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 6px; background: #fafafa; overflow-x: auto; max-width: 100%;">
-                <span v-for="name in fileNames" :key="name" style="display: flex; align-items: center; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 4px; padding: 2px 8px; font-size: 13px; color: #333; margin-right: 0; margin-bottom: 0; white-space: nowrap;">
-                  <span style="max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ name }}</span>
-                  <NButton size="tiny" type="error" style="margin-left: 6px;" @click="removeFileName(name)">删除</NButton>
+					<div v-if="fileNames.length > 0 && showFileList && !isMobile"
+							 style="position: absolute; bottom: 60px; left: 0; right: 0; margin: auto; z-index: 1000; max-width: 800px; width: 100%; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); border: 1px solid #eee; padding: 12px 16px;">
+						<div
+							style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; min-height: 40px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 6px; background: #fafafa; overflow-x: auto; max-width: 100%;">
+                <span v-for="name in fileNames" :key="name"
+											style="display: flex; align-items: center; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 4px; padding: 2px 8px; font-size: 13px; color: #333; margin-right: 0; margin-bottom: 0; white-space: nowrap;">
+                  <span style="max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{
+											name
+										}}</span>
+                  <NButton size="tiny" type="error" style="margin-left: 6px;"
+													 @click="removeFileName(name)">删除</NButton>
                 </span>
 						</div>
 					</div>
 					<HoverButton v-if="!isMobile" @click="handleUpload">
             <span class="text-xl text-[#4f555e] dark:text-white">
-              <SvgIcon icon="ri:upload-2-line" />
+              <SvgIcon icon="ri:upload-2-line"/>
             </span>
 					</HoverButton>
 					<HoverButton v-if="fileNames.length > 0 && !isMobile" @click="toggleFileList">
             <span class="text-xl text-[#4f555e] dark:text-white">
-              <SvgIcon icon="ri:file-2-line" />
+              <SvgIcon icon="ri:file-2-line"/>
             </span>
 					</HoverButton>
 					<NAutoComplete v-model:value="prompt" :options="searchOptions" :render-label="renderOption">
@@ -677,7 +715,7 @@ onUnmounted(() => {
 					<NButton type="primary" :disabled="buttonDisabled" @click="handleSubmit">
 						<template #icon>
               <span class="dark:text-black">
-                <SvgIcon icon="ri:send-plane-fill" />
+                <SvgIcon icon="ri:send-plane-fill"/>
               </span>
 						</template>
 					</NButton>
