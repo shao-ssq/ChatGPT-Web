@@ -114,54 +114,97 @@ async function onConversation() {
 	scrollToBottom()
 
 	try {
-		let lastText = ''
-		const fetchChatAPIOnce = async () => {
-			await fetchChatAPIProcess<Chat.ConversationResponse>({
-				prompt: message,
-				options,
-				signal: controller.signal,
-				onDownloadProgress: ({ event }) => {
-					const xhr = event.target
-					const { responseText } = xhr
-					// Always process the final line
-					const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
-					let chunk = responseText
-					if (lastIndex !== -1)
-						chunk = responseText.substring(lastIndex)
-					try {
-						const data = JSON.parse(chunk)
-						updateChat(
-							+uuid,
-							dataSources.value.length - 1,
-							{
-								dateTime: new Date().toLocaleString(),
-								text: lastText + (data.text ?? ''),
-								inversion: false,
-								error: false,
-								loading: true,
-								conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
-								requestOptions: { prompt: message, options: { ...options } },
-							},
-						)
-
-						if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
-							options.parentMessageId = data.id
-							lastText = data.text
-							message = ''
-							return fetchChatAPIOnce()
+					if (fileNames.value && fileNames.value.length > 0) {
+						try {
+							const resp = await axios.post('http://127.0.0.1:5000/chatExcel/query', {
+								prompt: message,
+								files: fileNames.value,
+								options,
+							}, { signal: controller.signal })
+							const respData = resp?.data
+							const textResult = respData?.text ?? respData?.result ?? (typeof respData === 'string' ? respData : JSON.stringify(respData))
+							updateChat(
+								+uuid,
+								dataSources.value.length - 1,
+								{
+									dateTime: new Date().toLocaleString(),
+									text: textResult,
+									inversion: false,
+									error: false,
+									loading: false,
+									conversationOptions: null,
+									requestOptions: { prompt: message, options: { ...options } },
+								},
+							)
+							scrollToBottomIfAtBottom()
 						}
-
-						scrollToBottomIfAtBottom()
+						catch (error: any) {
+							const errorMessage = error?.message ?? t('common.wrong')
+							updateChat(
+								+uuid,
+								dataSources.value.length - 1,
+								{
+									dateTime: new Date().toLocaleString(),
+									text: errorMessage,
+									inversion: false,
+									error: true,
+									loading: false,
+									conversationOptions: null,
+									requestOptions: { prompt: message, options: { ...options } },
+								},
+							)
+						}
+						return
 					}
-					catch (error) {
-						//
-					}
-				},
-			})
-			updateChatSome(+uuid, dataSources.value.length - 1, { loading: false })
-		}
 
-		await fetchChatAPIOnce()
+					let lastText = ''
+					const fetchChatAPIOnce = async () => {
+						await fetchChatAPIProcess<Chat.ConversationResponse>({
+							prompt: message,
+							options,
+							signal: controller.signal,
+							onDownloadProgress: ({ event }) => {
+								const xhr = event.target
+								const { responseText } = xhr
+								// Always process the final line
+								const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
+								let chunk = responseText
+								if (lastIndex !== -1)
+									chunk = responseText.substring(lastIndex)
+								try {
+									const data = JSON.parse(chunk)
+									updateChat(
+										+uuid,
+										dataSources.value.length - 1,
+										{
+											dateTime: new Date().toLocaleString(),
+											text: lastText + (data.text ?? ''),
+											inversion: false,
+											error: false,
+											loading: true,
+											conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
+											requestOptions: { prompt: message, options: { ...options } },
+										},
+									)
+
+									if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
+										options.parentMessageId = data.id
+										lastText = data.text
+										message = ''
+										return fetchChatAPIOnce()
+									}
+
+									scrollToBottomIfAtBottom()
+								}
+								catch (error) {
+									//
+								}
+							},
+						})
+						updateChatSome(+uuid, dataSources.value.length - 1, { loading: false })
+					}
+
+					await fetchChatAPIOnce()
 	}
 	catch (error: any) {
 		const errorMessage = error?.message ?? t('common.wrong')
