@@ -390,8 +390,6 @@ async function handleUpload() {
 		fileNames.value = [...fileNames.value, ...updatedFiles.map(file => file.name)]
 		if (!files.length) return
 
-		console.log('updatedFiles', updatedFiles)
-
 		const maxSizeMB = 100
 		for (const file of updatedFiles) {
 			if (file.size / 1024 / 1024 > maxSizeMB) {
@@ -407,9 +405,9 @@ async function handleUpload() {
 				formData.append('files[]', file)
 			})
 
-			// const res = await axios.post('/api/upload', formData, {
-			// 	headers: { 'Content-Type': 'multipart/form-data' },
-			// })
+			const res = await axios.post('http://127.0.0.1:5000/chatExcel/upload', formData, {
+				headers: { 'Content-Type': 'multipart/form-data' },
+			})
 			window.$message?.success('上传成功')
 			if (res.data?.success) {
 				window.$message?.success('上传成功')

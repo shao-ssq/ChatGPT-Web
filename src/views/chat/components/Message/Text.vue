@@ -40,6 +40,11 @@ mdi.use(mdKatex, { blockClass: 'katexmath-block rounded-md p-[10px]', errorColor
 
 const wrapClass = computed(() => {
   return [
+    // allow the message bubble to grow inside a flex container
+    'flex-1',
+    'min-w-0',
+    // cap width to 90% of available space so avatar/buttons can remain visible
+    'max-w-[90%]',
     'text-wrap',
     'min-w-[20px]',
     'rounded-md',
