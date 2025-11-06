@@ -43,9 +43,9 @@ export function fetchChatAPIProcess<T = any>(
       top_p: settingStore.top_p,
     }
   }
-
+	const VITE_APP_API_BASE_URL = process.env.VITE_APP_API_BASE_URL
   return post<T>({
-    url: 'http://127.0.0.1:3002/chat-process',
+    url: `${VITE_APP_API_BASE_URL}/chat-process`,
     data,
     signal: params.signal,
     onDownloadProgress: params.onDownloadProgress,
@@ -53,7 +53,8 @@ export function fetchChatAPIProcess<T = any>(
 }
 
 export function fetchSession<T>() {
+	const VITE_APP_API_BASE_URL = process.env.VITE_APP_API_BASE_URL
   return post<T>({
-    url: 'http://127.0.0.1:3002/session',
+    url: `${VITE_APP_API_BASE_URL}/session`,
   })
 }

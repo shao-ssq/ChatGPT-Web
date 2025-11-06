@@ -76,10 +76,10 @@ function handleSelect(key: 'copyText' | 'delete' | 'toggleRenderType') {
   }
 }
 
-function handleRegenerate() {
-  messageRef.value?.scrollIntoView()
-  emit('regenerate')
-}
+// function handleRegenerate() {
+//   messageRef.value?.scrollIntoView()
+//   emit('regenerate')
+// }
 
 async function handleCopy() {
   try {

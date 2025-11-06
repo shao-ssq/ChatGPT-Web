@@ -80,7 +80,9 @@ function removeFileName(filename: string) {
 const promptStore = usePromptStore()
 
 // 使用storeToRefs，保证store修改后，联想部分能够重新渲染
-const {promptList: promptTemplate} = storeToRefs<any>(promptStore)
+const refs = storeToRefs(promptStore) as unknown as { promptList: Ref<any[]> }
+const promptTemplate = refs.promptList
+
 
 // 未知原因刷新页面，loading 状态不会重置，手动重置
 dataSources.value.forEach((item, index) => {
