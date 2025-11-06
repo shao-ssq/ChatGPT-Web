@@ -28,7 +28,7 @@ const ms = useMessage()
 const chatStore = useChatStore()
 
 const {isMobile} = useBasicLayout()
-const {addChat, updateChat, updateChatSome, getChatByUuidAndIndex} = useChat()
+const {addChat, updateChat, updateChatSome} = useChat()
 const {scrollRef, scrollToBottom, scrollToBottomIfAtBottom} = useScroll()
 const {usingContext, toggleUsingContext} = useUsingContext()
 
