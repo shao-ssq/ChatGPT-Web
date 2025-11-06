@@ -44,6 +44,7 @@ const fileNames = ref<string[]>([])
 const showFileList = ref(true)
 const USER_UUID_KEY = 'chat_user_uuid'
 const userUuid = ref<string>(localStorage.getItem(USER_UUID_KEY) ?? '')
+const SERVICE_HTTP = import.meta.env.VITE_SERVICE_HTTP
 
 if (!userUuid.value) {
 	const gen = (typeof crypto !== 'undefined' && (crypto as any).randomUUID) ? (crypto as any).randomUUID() : `u_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -59,8 +60,20 @@ function toggleFileList() {
 	showFileList.value = !showFileList.value
 }
 
-function removeFileName(index: number) {
-	fileNames.value.splice(index, 1)
+function removeFileName(filename: string) {
+	const formData = new FormData()
+	formData.set("name", filename)
+	formData.set("userId", userUuid.value)
+
+	axios.post(`${SERVICE_HTTP}/chatExcel/delete`, formData, {
+		headers: { 'Content-Type': 'multipart/form-data' },
+	})
+
+	// 找到文件名在数组中的索引并删除
+	const idx = fileNames.value.findIndex(name => name === filename)
+	if (idx !== -1) {
+		fileNames.value.splice(idx, 1)
+	}
 }
 
 // 添加PromptStore
@@ -128,8 +141,7 @@ async function onConversation() {
 
 	try {
 		if (fileNames.value && fileNames.value.length > 0) {
-			const controller = new AbortController()
-			const resp = await fetch('http://127.0.0.1:5000/chatExcel/query', {
+			const resp = await fetch(`${SERVICE_HTTP}/chatExcel/query`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -138,48 +150,11 @@ async function onConversation() {
 					query: message,
 					userId: userUuid.value,
 				}),
-				signal: controller.signal,
 			})
 
-			const reader = resp.body.getReader()
-			const decoder = new TextDecoder('utf-8')
-			let fullText = ''
+			const data = await resp.json()
+			const fullText = data
 
-			while (true) {
-				const {done, value} = await reader.read()
-				if (done) break
-
-				const chunk = decoder.decode(value, {stream: true})
-				const lines = chunk.split('\n').filter(Boolean)
-
-				for (const line of lines) {
-					try {
-						const data = JSON.parse(line)
-						if (data.text === '[DONE]') break
-
-						fullText += data.text
-
-						updateChat(
-							+uuid,
-							dataSources.value.length - 1,
-							{
-								dateTime: new Date().toLocaleString(),
-								text: fullText,
-								inversion: false,
-								error: false,
-								loading: true, // 还在流式输出中
-								conversationOptions: null,
-								requestOptions: {prompt: message, options: {...options}},
-							},
-						)
-						scrollToBottomIfAtBottom()
-					} catch (e) {
-						console.error('Parse error', e, line)
-					}
-				}
-			}
-
-// 最终更新 loading = false
 			updateChat(
 				+uuid,
 				dataSources.value.length - 1,
@@ -188,12 +163,13 @@ async function onConversation() {
 					text: fullText,
 					inversion: false,
 					error: false,
-					loading: false,
+					loading: false, // 一次性返回，不需要流式状态
 					conversationOptions: null,
 					requestOptions: {prompt: message, options: {...options}},
 				},
 			)
 
+			scrollToBottomIfAtBottom()
 			return
 		}
 
@@ -461,7 +437,6 @@ async function handleUpload() {
 			const newName = `${file.name}`
 			return new File([file], newName, {type: file.type})
 		})
-		fileNames.value = [...fileNames.value, ...updatedFiles.map(file => file.name)]
 		if (!files.length) return
 
 		const maxSizeMB = 100
@@ -475,17 +450,18 @@ async function handleUpload() {
 		loading.value = true
 		try {
 			const formData = new FormData()
-			// include user uuid to distinguish uploads from different users
 			formData.append('userId', userUuid.value)
 			updatedFiles.forEach(file => {
 				formData.append('files', file)
 			})
-
-			const res = await axios.post('http://127.0.0.1:5000/chatExcel/upload', formData, {
+			const res = await axios.post(`${SERVICE_HTTP}/chatExcel/upload`, formData, {
 				headers: {'Content-Type': 'multipart/form-data'},
 			})
 			if (res.data?.success) {
 				window.$message?.success('上传成功')
+				if (Array.isArray(res.data.result)) {
+					fileNames.value = [...fileNames.value, ...res.data.result]
+				}
 			} else {
 				window.$message?.error(res.data?.message || '上传失败')
 			}
@@ -620,7 +596,7 @@ onUnmounted(() => {
 				<div
 					id="image-wrapper"
 					class="w-full max-w-screen-xl m-auto dark:bg-[#101014]"
-					:class="[isMobile ? 'p-2' : 'p-4']"
+					:class="[isMobile ? 'p-2' : 'p-[50px]']"
 				>
 					<template v-if="!dataSources.length">
 						<div class="flex items-center justify-center mt-4 text-center text-neutral-300">
@@ -641,7 +617,7 @@ onUnmounted(() => {
 								@regenerate="onRegenerate(index)"
 								@delete="handleDelete(index)"
 							/>
-							<div class="sticky bottom-0 left-0 flex justify-center">
+							<div class="sticky bottom-[50px] left-0 flex justify-center">
 								<NButton v-if="loading" type="warning" @click="handleStop">
 									<template #icon>
 										<SvgIcon icon="ri:stop-circle-line"/>
@@ -674,7 +650,7 @@ onUnmounted(() => {
 					</HoverButton>
 					<!-- 文件列表弹窗组件，显示在上传按钮上方 -->
 					<div v-if="fileNames.length > 0 && showFileList && !isMobile"
-							 style="position: absolute; bottom: 60px; left: 0; right: 0; margin: auto; z-index: 1000; max-width: 800px; width: 100%; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); border: 1px solid #eee; padding: 12px 16px;">
+							 style="position: absolute; bottom: 60px; left: 0; right: 0; margin: auto; z-index: 1000; max-width: 800px; width: 100%; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); border: 1px solid #eee; ">
 						<div
 							style="display: flex; flex-wrap: nowrap; gap: 8px; align-items: center; min-height: 40px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 6px; background: #fafafa; overflow-x: auto; max-width: 100%;">
                 <span v-for="name in fileNames" :key="name"

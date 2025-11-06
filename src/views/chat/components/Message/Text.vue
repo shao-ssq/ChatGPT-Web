@@ -42,11 +42,10 @@ const wrapClass = computed(() => {
   return [
     // allow the message bubble to grow inside a flex container
     'flex-1',
-    'min-w-0',
     // cap width to 90% of available space so avatar/buttons can remain visible
-    'max-w-[90%]',
+    'max-w-[100%]',
     'text-wrap',
-    'min-w-[20px]',
+    'min-w-[80%]',
     'rounded-md',
     isMobile.value ? 'p-2' : 'px-3 py-2',
     props.inversion ? 'bg-[#d2f9d1]' : 'bg-[#f4f6f8]',

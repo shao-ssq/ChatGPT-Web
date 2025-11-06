@@ -57,10 +57,3 @@ export function fetchSession<T>() {
     url: 'http://127.0.0.1:3002/session',
   })
 }
-
-export function fetchVerify<T>(token: string) {
-  return post<T>({
-    url: 'http://127.0.0.1:3002/verify',
-    data: { token },
-  })
-}
