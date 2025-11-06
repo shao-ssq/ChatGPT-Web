@@ -66,7 +66,7 @@ function removeFileName(filename: string) {
 	formData.set("userId", userUuid.value)
 
 	axios.post(`${SERVICE_HTTP}/chatExcel/delete`, formData, {
-		headers: { 'Content-Type': 'multipart/form-data' },
+		headers: {'Content-Type': 'multipart/form-data'},
 	})
 
 	// 找到文件名在数组中的索引并删除
@@ -173,101 +173,94 @@ async function onConversation() {
 
 			scrollToBottomIfAtBottom()
 			return
-		}
+		} else {
+			controller = new AbortController()
 
-		let lastText = ''
-			// attach user uuid to options so backend can identify requester
-		;(options as any).userUuid = userUuid.value
-		const fetchChatAPIOnce = async () => {
-			await fetchChatAPIProcess<Chat.ConversationResponse>({
-				prompt: message,
-				options,
+			const resp = await fetch(`${SERVICE_HTTP}/generate`, {
+				method: 'POST',
+				body: JSON.stringify({ message }),
+				headers: { 'Content-Type': 'application/json' },
 				signal: controller.signal,
-				onDownloadProgress: ({event}) => {
-					const xhr = event.target
-					const {responseText} = xhr
-					// Always process the final line
-					const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
-					let chunk = responseText
-					if (lastIndex !== -1)
-						chunk = responseText.substring(lastIndex)
-					try {
-						const data = JSON.parse(chunk)
-						updateChat(
-							+uuid,
-							dataSources.value.length - 1,
-							{
-								dateTime: new Date().toLocaleString(),
-								text: lastText + (data.text ?? ''),
-								inversion: false,
-								error: false,
-								loading: true,
-								conversationOptions: {conversationId: data.conversationId, parentMessageId: data.id},
-								requestOptions: {prompt: message, options: {...options}},
-							},
-						)
-
-						if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
-							options.parentMessageId = data.id
-							lastText = data.text
-							message = ''
-							return fetchChatAPIOnce()
-						}
-
-						scrollToBottomIfAtBottom()
-					} catch (error) {
-						//
-					}
-				},
 			})
-			updateChatSome(+uuid, dataSources.value.length - 1, {loading: false})
-		}
 
-		await fetchChatAPIOnce()
-	} catch (error: any) {
-		const errorMessage = error?.message ?? t('common.wrong')
+			if (!resp.ok || !resp.body) {
+				throw new Error('网络响应错误或无流数据')
+			}
 
-		if (error.message === 'canceled') {
-			updateChatSome(
+			const reader = resp.body.getReader()
+			const decoder = new TextDecoder('utf-8')
+
+			let textResult = ''
+			while (true) {
+				const { done, value } = await reader.read()
+				if (done) break
+				const chunk = decoder.decode(value, { stream: true })
+				textResult += chunk
+				updateChat(
+					+uuid,
+					dataSources.value.length - 1,
+					{
+						dateTime: new Date().toLocaleString(),
+						text: textResult,
+						inversion: false,
+						error: false,
+						loading: true,
+						conversationOptions: null,
+						requestOptions: { prompt: message, options: { ...options } },
+					},
+				)
+				scrollToBottomIfAtBottom()
+			}
+
+			updateChat(
 				+uuid,
 				dataSources.value.length - 1,
 				{
+					dateTime: new Date().toLocaleString(),
+					text: textResult,
+					inversion: false,
+					error: false,
 					loading: false,
+					conversationOptions: null,
+					requestOptions: { prompt: message, options: { ...options } },
 				},
 			)
 			scrollToBottomIfAtBottom()
-			return
 		}
-
-		const currentChat = getChatByUuidAndIndex(+uuid, dataSources.value.length - 1)
-
-		if (currentChat?.text && currentChat.text !== '') {
-			updateChatSome(
+	} catch (error: any) {
+		// 如果是中断错误，保留已生成的内容
+		if (error.name === 'AbortError' || error.message.includes('aborted')) {
+			updateChat(
 				+uuid,
 				dataSources.value.length - 1,
 				{
-					text: `${currentChat.text}\n[${errorMessage}]`,
+					dateTime: new Date().toLocaleString(),
+					text: dataSources.value[dataSources.value.length - 1].text || '',
+					inversion: false,
 					error: false,
 					loading: false,
+					conversationOptions: null,
+					requestOptions: {prompt: message, options: {...options}},
 				},
 			)
-			return
 		}
-
-		updateChat(
-			+uuid,
-			dataSources.value.length - 1,
-			{
-				dateTime: new Date().toLocaleString(),
-				text: errorMessage,
-				inversion: false,
-				error: true,
-				loading: false,
-				conversationOptions: null,
-				requestOptions: {prompt: message, options: {...options}},
-			},
-		)
-		scrollToBottomIfAtBottom()
+		else {
+			// 其他错误则显示错误信息
+			const errorMessage = error?.message ?? t('common.wrong')
+			updateChat(
+				+uuid,
+				dataSources.value.length - 1,
+				{
+					dateTime: new Date().toLocaleString(),
+					text: errorMessage,
+					inversion: false,
+					error: true,
+					loading: false,
+					conversationOptions: null,
+					requestOptions: {prompt: message, options: {...options}},
+				},
+			)
+		}
 	} finally {
 		loading.value = false
 	}
