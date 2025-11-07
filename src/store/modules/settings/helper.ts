@@ -10,7 +10,7 @@ export interface SettingsState {
 
 export function defaultSetting(): SettingsState {
   return {
-    systemMessage: '你是天工 ChatExcel，来自 ChatBI。请仔细遵循用户的指示，并使用Markdown格式进行回复。',
+    systemMessage: '你是 ChatExcel，来自 ChatBI。请仔细遵循用户的指示，并使用Markdown格式进行回复。',
     temperature: 0.8,
     top_p: 1,
   }

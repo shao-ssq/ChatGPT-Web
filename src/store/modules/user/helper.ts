@@ -16,8 +16,8 @@ export function defaultSetting(): UserState {
   return {
     userInfo: {
       avatar: '/avatar.jpg',
-      name: '天工 ChatExcel',
-      description: '源于 ChatBi',
+      name: 'ChatExcel',
+      description: '源于 ChatBI',
     },
   }
 }

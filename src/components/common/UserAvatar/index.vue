@@ -19,6 +19,7 @@ const userInfo = computed(() => userStore.userInfo)
           round
           :src="userInfo.avatar"
           :fallback-src="defaultAvatar"
+					class="!bg-transparent"
         />
       </template>
       <template v-else>

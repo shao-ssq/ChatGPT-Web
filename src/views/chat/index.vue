@@ -16,7 +16,9 @@ import {useChatStore, usePromptStore} from '@/store'
 import {fetchChatAPIProcess} from '@/api'
 import {t} from '@/locales'
 import axios from "axios";
-
+import { addCollection } from '@iconify/vue'
+import ri from '@iconify-json/ri/icons.json'
+addCollection(ri)
 let controller = new AbortController()
 
 const openLongReply = import.meta.env.VITE_GLOB_OPEN_LONG_REPLY === 'true'
